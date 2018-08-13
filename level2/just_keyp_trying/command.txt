@@ -1,0 +1,1 @@
+tshark -r data.pcap -T fields -e usb.capdata > data.txt
